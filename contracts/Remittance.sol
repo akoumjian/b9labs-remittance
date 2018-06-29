@@ -30,18 +30,17 @@ contract Remittance {
         uint value
     );
 
-    function genMagicHash(address approved, string password) public pure returns (bytes32) {
-        bytes32 magicHash = keccak256(abi.encodePacked(approved, password));
-        return magicHash;
+    function genMagicHash(address approved, string password) public view returns (bytes32 magicHash) {
+        magicHash = keccak256(abi.encodePacked(this, approved, password));
     }
 
     function withdraw(string password) public {
         bytes32 magicHash = genMagicHash(msg.sender, password);
-        RemitStruct memory remittance = remittances[magicHash];
-        require(remittance.balance != 0, "Balance is 0");
-        emit Withdraw(msg.sender, magicHash, remittance.balance);
-        uint available = remittances[magicHash].balance;
-        remittances[magicHash].balance = 0;
+        RemitStruct storage remittance = remittances[magicHash];
+        uint available = remittance.balance;
+        require(available > 0, "Balance is 0");
+        emit Withdraw(msg.sender, magicHash, available);
+        remittance.balance = 0;
         msg.sender.transfer(available);
     }
 
@@ -56,10 +55,11 @@ contract Remittance {
 
     function revoke(bytes32 magicHash) public {
         RemitStruct storage remittance = remittances[magicHash];
-        require(msg.sender == remittance.sentBy, "Only remitter can call back funds");
-        require(remittance.balance > 0, "There are no funds to revoke");
-        emit Revoke(msg.sender, magicHash, remittance.balance);
         uint available = remittance.balance;
+        address creator = remittance.sentBy;
+        require(msg.sender == creator, "Only remitter can call back funds");
+        require(available > 0, "There are no funds to revoke");
+        emit Revoke(creator, magicHash, available);
         remittance.balance = 0;
         msg.sender.transfer(available);
     }
